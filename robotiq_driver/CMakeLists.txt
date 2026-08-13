@@ -50,6 +50,7 @@ add_library(
   include/robotiq_driver/hardware_interface.hpp
   include/robotiq_driver/serial.hpp
   include/robotiq_driver/serial_factory.hpp
+  include/robotiq_driver/urcap/urcap_driver.hpp
   include/robotiq_driver/visibility_control.hpp
   src/crc_utils.cpp
   src/data_utils.cpp
@@ -57,6 +58,7 @@ add_library(
   src/default_driver.cpp
   src/default_driver_factory.cpp
   src/fake/fake_driver.cpp
+  src/urcap/urcap_driver.cpp
   src/default_serial.cpp
   src/default_serial_factory.cpp
 )

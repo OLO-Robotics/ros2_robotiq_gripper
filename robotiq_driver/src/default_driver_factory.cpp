@@ -34,6 +34,7 @@
 #include <robotiq_driver/default_serial.hpp>
 #include <robotiq_driver/default_serial_factory.hpp>
 #include <robotiq_driver/fake/fake_driver.hpp>
+#include <robotiq_driver/urcap/urcap_driver.hpp>
 
 #include <rclcpp/logging.hpp>
 
@@ -52,6 +53,15 @@ constexpr double kGripperForceMultiplierParamDefault = 1.0;
 
 constexpr auto kUseDummyParamName = "use_dummy";
 constexpr auto kUseDummyParamDefault = "false";
+
+constexpr auto kUseUrcapParamName = "use_urcap";
+constexpr auto kUseUrcapParamDefault = "false";
+
+constexpr auto kRobotIpParamName = "robot_ip";
+constexpr auto kRobotIpParamDefault = "192.168.1.1";
+
+constexpr auto kRobotPortParamName = "robot_port";
+constexpr uint16_t kRobotPortParamDefault = 63352;
 
 std::unique_ptr<Driver> DefaultDriverFactory::create(const hardware_interface::HardwareInfo& info) const
 {
@@ -91,6 +101,24 @@ std::unique_ptr<Driver> DefaultDriverFactory::create_driver(const hardware_inter
   {
     RCLCPP_INFO(kLogger, "You are connected to a dummy driver, not a real hardware.");
     return std::make_unique<FakeDriver>();
+  }
+  else if (info.hardware_parameters.count(kUseUrcapParamName) &&
+           info.hardware_parameters.at(kUseUrcapParamName) != kUseUrcapParamDefault)
+  {
+    RCLCPP_INFO(kLogger, "Reading %s...", kRobotIpParamName);
+    const std::string robot_ip = info.hardware_parameters.count(kRobotIpParamName) ?
+                                     info.hardware_parameters.at(kRobotIpParamName) :
+                                     kRobotIpParamDefault;
+    RCLCPP_INFO(kLogger, "%s: %s", kRobotIpParamName, robot_ip.c_str());
+
+    RCLCPP_INFO(kLogger, "Reading %s...", kRobotPortParamName);
+    const uint16_t robot_port =
+        info.hardware_parameters.count(kRobotPortParamName) ?
+            static_cast<uint16_t>(std::stoul(info.hardware_parameters.at(kRobotPortParamName))) :
+            kRobotPortParamDefault;
+    RCLCPP_INFO(kLogger, "%s: %d", kRobotPortParamName, robot_port);
+
+    return std::make_unique<UrcapDriver>(robot_ip, robot_port);
   }
   else
   {

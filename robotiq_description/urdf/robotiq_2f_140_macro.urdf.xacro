@@ -11,6 +11,9 @@
         isaac_joint_states:=/isaac_joint_states
         use_fake_hardware:=false
         mock_sensor_commands:=false
+        use_urcap:=false
+        robot_ip:=192.168.1.1
+        robot_port:=63352
         include_ros2_control:=true
         com_port:=/dev/ttyUSB0
         gripper_speed_multiplier:=1.0
@@ -31,6 +34,9 @@
                 isaac_joint_states="${isaac_joint_states}"
                 use_fake_hardware="${use_fake_hardware}"
                 mock_sensor_commands="${mock_sensor_commands}"
+                use_urcap="${use_urcap}"
+                robot_ip="${robot_ip}"
+                robot_port="${robot_port}"
                 com_port="${com_port}"
                 gripper_speed_multiplier="${gripper_speed_multiplier}"
                 gripper_force_multiplier="${gripper_force_multiplier}"

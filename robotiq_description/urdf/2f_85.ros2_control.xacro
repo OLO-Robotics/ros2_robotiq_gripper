@@ -10,6 +10,9 @@
         isaac_joint_states:=/isaac_joint_states
         use_fake_hardware:=false
         mock_sensor_commands:=false
+        use_urcap:=false
+        robot_ip:=192.168.1.1
+        robot_port:=63352
         com_port:=/dev/ttyUSB0
         gripper_speed_multiplier:=1.0
         gripper_force_multiplier:=0.5
@@ -41,6 +44,11 @@
                 <xacro:unless value="${use_fake_hardware or sim_gazebo or sim_isaac}">
                     <plugin>robotiq_driver/RobotiqGripperHardwareInterface</plugin>
                     <param name="gripper_closed_position">${gripper_closed_position}</param>
+                    <!-- Set use_urcap to true to connect through the URCap socket server
+                         on a Universal Robots controller instead of a serial port. -->
+                    <param name="use_urcap">${use_urcap}</param>
+                    <param name="robot_ip">${robot_ip}</param>
+                    <param name="robot_port">${robot_port}</param>
                     <param name="COM_port">${com_port}</param>
                     <param name="gripper_speed_multiplier">${gripper_speed_multiplier}</param>
                     <param name="gripper_force_multiplier">${gripper_force_multiplier}</param>
