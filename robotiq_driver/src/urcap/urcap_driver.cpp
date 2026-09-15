@@ -81,6 +81,8 @@ constexpr auto kActivationTimeout = std::chrono::seconds{ 10 };
 constexpr auto kMotionTimeout = std::chrono::seconds{ 30 };
 constexpr auto kActivationPollPeriod = std::chrono::milliseconds{ 100 };
 constexpr auto kMotionPollPeriod = std::chrono::milliseconds{ 10 };
+constexpr auto kResetSettleTime = std::chrono::milliseconds{ 500 };
+constexpr auto kActivationSettleTime = std::chrono::seconds{ 1 };
 
 UrcapDriver::UrcapDriver(std::string robot_ip, uint16_t robot_port)
   : robot_ip_{ std::move(robot_ip) }, robot_port_{ robot_port }
@@ -195,22 +197,35 @@ void UrcapDriver::activate()
 {
   RCLCPP_INFO(kLogger, "Activate...");
 
-  reset();
-
-  // Set ACT to 1 to begin gripper activation.
-  set_variable(kActivateVariable, 1);
-
-  const auto deadline = std::chrono::steady_clock::now() + kActivationTimeout;
-  while (get_variable(kActivateVariable) != 1 || get_variable(kStatusVariable) != kGripperActivatedStatus)
+  // If activation is already complete (STA == 3), do not reactivate
+  const bool already_activated = get_variable(kStatusVariable) == kGripperActivatedStatus;
+  if (!already_activated)
   {
-    if (std::chrono::steady_clock::now() >= deadline)
+    reset();
+
+    // Set ACT to 1 to begin gripper activation.
+    set_variable(kActivateVariable, 1);
+    std::this_thread::sleep_for(kActivationSettleTime);
+
+    const auto deadline = std::chrono::steady_clock::now() + kActivationTimeout;
+    while (get_variable(kActivateVariable) != 1 || get_variable(kStatusVariable) != kGripperActivatedStatus)
     {
-      throw DriverException{ "Timeout while waiting for the gripper to activate" };
+      if (std::chrono::steady_clock::now() >= deadline)
+      {
+        throw DriverException{ "Timeout while waiting for the gripper to activate" };
+      }
+      std::this_thread::sleep_for(kActivationPollPeriod);
     }
-    std::this_thread::sleep_for(kActivationPollPeriod);
   }
 
   auto_calibrate();
+
+  // Calibration ends open. Remember that pose with the operational speed/force so
+  // the comms thread does not immediately re-issue GTO=1 against the open stop.
+  last_commanded_position_ = min_position_;
+  last_commanded_speed_ = commanded_gripper_speed_;
+  last_commanded_force_ = commanded_gripper_force_;
+  has_last_command_ = true;
 }
 
 void UrcapDriver::deactivate()
@@ -223,9 +238,19 @@ void UrcapDriver::deactivate()
 void UrcapDriver::set_gripper_position(uint8_t pos)
 {
   const auto raw_pos = to_raw_position(pos);
+  if (has_last_command_ && raw_pos == last_commanded_position_ &&
+      commanded_gripper_speed_ == last_commanded_speed_ && commanded_gripper_force_ == last_commanded_force_)
+  {
+    return;
+  }
+
   set_variables(std::string{ kPositionVariable } + " " + std::to_string(raw_pos) + " " + kSpeedVariable + " " +
                 std::to_string(commanded_gripper_speed_) + " " + kForceVariable + " " +
                 std::to_string(commanded_gripper_force_) + " " + kGoToVariable + " 1");
+  last_commanded_position_ = raw_pos;
+  last_commanded_speed_ = commanded_gripper_speed_;
+  last_commanded_force_ = commanded_gripper_force_;
+  has_last_command_ = true;
 }
 
 uint8_t UrcapDriver::get_gripper_position()
@@ -258,6 +283,7 @@ void UrcapDriver::reset()
     set_variable(kAutoReleaseVariable, 0);
     if (get_variable(kActivateVariable) == 0 && get_variable(kStatusVariable) == kGripperResetStatus)
     {
+      std::this_thread::sleep_for(kResetSettleTime);
       return;
     }
     std::this_thread::sleep_for(kActivationPollPeriod);
@@ -269,13 +295,6 @@ void UrcapDriver::reset()
 void UrcapDriver::auto_calibrate()
 {
   RCLCPP_INFO(kLogger, "Calibrating gripper endpoints...");
-
-  // Start fully open in case the fingers are holding an object.
-  const auto open_start = move_and_wait_for_position(min_position_, kCalibrationSpeed, kCalibrationForce);
-  if (open_start.second != kObjectDetectionAtDestination)
-  {
-    throw DriverException{ "Calibration failed while opening to start" };
-  }
 
   // Close as far as possible and record the closed endpoint.
   const auto closed = move_and_wait_for_position(max_position_, kCalibrationSpeed, kCalibrationForce);
@@ -303,6 +322,8 @@ void UrcapDriver::auto_calibrate()
 
 std::pair<uint8_t, uint8_t> UrcapDriver::move_and_wait_for_position(uint8_t position, uint8_t speed, uint8_t force)
 {
+  const auto initial_position = get_variable(kPositionVariable);
+  const bool motion_expected = initial_position != position;
   set_variables(std::string{ kPositionVariable } + " " + std::to_string(position) + " " + kSpeedVariable + " " +
                 std::to_string(speed) + " " + kForceVariable + " " + std::to_string(force) + " " + kGoToVariable +
                 " 1");
@@ -316,6 +337,21 @@ std::pair<uint8_t, uint8_t> UrcapDriver::move_and_wait_for_position(uint8_t posi
       throw DriverException{ "Timeout while waiting for the gripper to acknowledge the position request" };
     }
     std::this_thread::sleep_for(kMotionPollPeriod);
+  }
+
+  // Wait for motion to start before accepting a previous completed status.
+  if (motion_expected)
+  {
+    deadline = std::chrono::steady_clock::now() + kMotionTimeout;
+    while (get_variable(kObjectDetectionVariable) != kObjectDetectionMoving &&
+           get_variable(kPositionVariable) == initial_position)
+    {
+      if (std::chrono::steady_clock::now() >= deadline)
+      {
+        throw DriverException{ "Timeout while waiting for the gripper motion to start" };
+      }
+      std::this_thread::sleep_for(kMotionPollPeriod);
+    }
   }
 
   // Wait until the fingers stop moving.

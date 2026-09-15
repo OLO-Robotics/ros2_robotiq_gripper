@@ -103,7 +103,7 @@ private:
   void reset();
 
   /**
-   * @brief Measure the open and closed endpoints by slowly opening and closing the gripper.
+   * @brief Measure the open and closed endpoints by slowly closing and opening the gripper.
    * @throw DriverException if calibration cannot reach either endpoint.
    */
   void auto_calibrate();
@@ -152,6 +152,11 @@ private:
 
   uint8_t commanded_gripper_speed_ = 0xFF;
   uint8_t commanded_gripper_force_ = 0xFF;
+
+  bool has_last_command_ = false;
+  uint8_t last_commanded_position_ = 0;
+  uint8_t last_commanded_speed_ = 0;
+  uint8_t last_commanded_force_ = 0;
 
   // Measured open/closed endpoints after activation calibration.
   uint8_t min_position_ = 0;
