@@ -220,12 +220,9 @@ void UrcapDriver::activate()
 
   auto_calibrate();
 
-  // Calibration ends open. Remember that pose with the operational speed/force so
+  // Calibration ends open. Store that pose with the operational speed/force so
   // the comms thread does not immediately re-issue GTO=1 against the open stop.
-  last_commanded_position_ = min_position_;
-  last_commanded_speed_ = commanded_gripper_speed_;
-  last_commanded_force_ = commanded_gripper_force_;
-  has_last_command_ = true;
+  last_command_ = GripperCommand{ min_position_, commanded_gripper_speed_, commanded_gripper_force_ };
 }
 
 void UrcapDriver::deactivate()
@@ -237,20 +234,16 @@ void UrcapDriver::deactivate()
 
 void UrcapDriver::set_gripper_position(uint8_t pos)
 {
-  const auto raw_pos = to_raw_position(pos);
-  if (has_last_command_ && raw_pos == last_commanded_position_ &&
-      commanded_gripper_speed_ == last_commanded_speed_ && commanded_gripper_force_ == last_commanded_force_)
+  const GripperCommand command{ to_raw_position(pos), commanded_gripper_speed_, commanded_gripper_force_ };
+  if (last_command_ == command)
   {
     return;
   }
 
-  set_variables(std::string{ kPositionVariable } + " " + std::to_string(raw_pos) + " " + kSpeedVariable + " " +
-                std::to_string(commanded_gripper_speed_) + " " + kForceVariable + " " +
-                std::to_string(commanded_gripper_force_) + " " + kGoToVariable + " 1");
-  last_commanded_position_ = raw_pos;
-  last_commanded_speed_ = commanded_gripper_speed_;
-  last_commanded_force_ = commanded_gripper_force_;
-  has_last_command_ = true;
+  set_variables(std::string{ kPositionVariable } + " " + std::to_string(command.position) + " " + kSpeedVariable + " " +
+                std::to_string(command.speed) + " " + kForceVariable + " " + std::to_string(command.force) + " " +
+                kGoToVariable + " 1");
+  last_command_ = command;
 }
 
 uint8_t UrcapDriver::get_gripper_position()

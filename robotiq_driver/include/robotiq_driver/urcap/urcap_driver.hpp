@@ -29,6 +29,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -153,10 +154,19 @@ private:
   uint8_t commanded_gripper_speed_ = 0xFF;
   uint8_t commanded_gripper_force_ = 0xFF;
 
-  bool has_last_command_ = false;
-  uint8_t last_commanded_position_ = 0;
-  uint8_t last_commanded_speed_ = 0;
-  uint8_t last_commanded_force_ = 0;
+  struct GripperCommand
+  {
+    uint8_t position = 0;
+    uint8_t speed = 0;
+    uint8_t force = 0;
+
+    bool operator==(const GripperCommand& other) const
+    {
+      return position == other.position && speed == other.speed && force == other.force;
+    }
+  };
+
+  std::optional<GripperCommand> last_command_;
 
   // Measured open/closed endpoints after activation calibration.
   uint8_t min_position_ = 0;
